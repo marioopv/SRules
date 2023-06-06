@@ -1,2 +1,2 @@
 # SRules
-Create a ruleset from a feature importance list
+Create a set of rules based on a random forest based on the most important features.
