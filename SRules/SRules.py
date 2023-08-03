@@ -416,8 +416,11 @@ class SRules(ClassifierMixin):
         # Categoriza patrones
         self.categorize_patterns(minimal_dataset)
 
+        # Sort rules
+        sorted_rules = self.sorting(sorting_method)
+        
         # Prune rules
-        self.prune_rules(sorting_method)
+        self.prune_rules(sorted_rules)
 
         self.all_rules_.append(self.minimal_rules_)
 
@@ -437,79 +440,84 @@ class SRules(ClassifierMixin):
         """
         all_covered = False
         previous_len = len(X_train)
-        print("->FIT")
+        print("->TRAINING MODEL")
         counter = 1
         while all_covered is not True:
-
-            print(f'->COUNTER {counter}')
+            print(f'-->FITTING RULES {counter}')
 
             self.single_fit(dataset,
                             feature_importances,
                             most_important_features=most_important_features,
                             sorting_method="target_accuracy")
 
-            ############################################
+            # New datasets
+            X_train, y_train, dataset, new_len = self.new_datasets(X_train, y_train, dataset, sorting_method)
 
-            # los no dedecidos
-            y_pred_train_rules = self.predict(X_train, sorting_method)
-            filter_indices = np.where(np.array(y_pred_train_rules) == None)[0]
-
-            # new X_train
-            np_filterred_X_train = np.array(X_train)[filter_indices]
-            X_train = copy.deepcopy(np_filterred_X_train)
-            np_filterred_y_train = np.array(y_train)[filter_indices]
-            y_train = copy.deepcopy(np_filterred_y_train)
-
-            # new Pandas
-            df = dataset.filter(items=filter_indices, axis=0)
-            dataset = copy.deepcopy(df)
-            new_len = len(X_train)
-
-            display = ""
-            display += f'->previous_len: {previous_len}\n'
-            display += f'->new_len: {new_len}\n'
-            display += f'> SRules --  Number of Rules {len(self.rules_)}:\n'
-            display += f'> SRules --  Number of Minimal Rules {len(self.minimal_rules_)}:\n'
-            print(display)
+            if self.display_logs:
+                display = ""
+                display += f'---> Previous dataset length: {previous_len}\n'
+                display += f'---> New dataset length: {new_len}\n'
+                print(display)
+                print(self.rules_description())
             if new_len == 0:
                 break
             if previous_len == new_len:
                 all_covered = True
             previous_len = new_len
 
-            ###############################
+            ## FIT ENSEMBLE MODEL
             ensemble = RandomForestClassifier(n_estimators=100, criterion="gini")
             ensemble.fit(X_train, y_train)
             feature_importances = ensemble.feature_importances_
 
-            ################## CLEAN
-            self.rules_ = []
-            self.minimal_rules_ = []
-            self.feature_importance_list = None
-            self.nodes_dict = {}
-            self.nodes_dict_ids = []
-            self.pattern_list_valid_nodes = []
-            self.most_important_features_ = []
+            # Clean variables
+            self.clean()
             counter += 1
 
-        # PRUNE Y clean rules
+        # Join Rules
+        self.join_all_rules()
 
-        self.rules_ = []
-        self.minimal_rules_ = []
+        # Prune rules
+        self.prune_rules(self.rules_)
+
+        return self
+
+    def new_datasets(self, X_train, y_train, dataset, sorting_method):
+        y_pred_train_rules = self.predict(X_train, sorting_method)
+        filter_indices = np.where(np.array(y_pred_train_rules) == None)[0]
+
+        # new X_train
+        np_filtered_X_train = np.array(X_train)[filter_indices]
+        X_train = np_filtered_X_train
+        np_filtered_y_train = np.array(y_train)[filter_indices]
+        y_train = np_filtered_y_train
+
+        # new Pandas
+        df = dataset.filter(items=filter_indices, axis=0)
+        dataset = df
+        new_len = len(X_train)
+        return X_train, y_train, dataset, new_len
+        #return copy.deepcopy(np_filtered_X_train), copy.deepcopy(np_filtered_y_train), copy.deepcopy(df), new_len
+
+    def join_all_rules(self):
         for rule_list in self.all_rules_:
             for rule in rule_list:
                 self.rules_.append(rule)
 
-        #self.prune_rules(sorting_method)
+    def clean(self):
+        self.rules_ = []
+        self.minimal_rules_ = []
+        self.feature_importance_list = None
+        self.nodes_dict = {}
+        self.nodes_dict_ids = []
+        self.pattern_list_valid_nodes = []
+        self.most_important_features_ = []
 
-        return self
-
-    def prune_rules(self, sorting_method="target_accuracy"):
+    def prune_rules(self, sorted_rules):
         start_time = time.time()
         if self.display_logs:
             print("->Prune Rules")
 
-        sorted_rules = self.sorting(sorting_method)
         for idx, current_rule in reversed(list(enumerate(sorted_rules))):
             current_full_rule = current_rule.get_full_rule()
             should_include = True
@@ -547,7 +555,7 @@ class SRules(ClassifierMixin):
 
         The predicted class of an input sample is a vote by the trees in
         the forest, weighted by their probability estimates. That is,
-        the predicted class is the one with highest mean probability
+        the predicted class is the one with the highest mean probability
         estimate across the trees.
 
         Parameters
@@ -568,7 +576,8 @@ class SRules(ClassifierMixin):
         predictions = []
 
         if not self.minimal_rules_:
-            self.prune_rules(sorting_method)
+            sorted_rules = self.sorting(sorting_method)
+            self.prune_rules(sorted_rules)
 
         for x in X:
             categorize_rule = None
@@ -583,18 +592,19 @@ class SRules(ClassifierMixin):
 
         return predictions
 
-    def description(self):
+    def rules_description(self):
         display = '> ++++++++++++++++++++++++++++\n'
-        display += f'> SRules --  Number of Rules {len(self.rules_)}:\n'
-        display += f'> SRules --  Number of Minimal Rules {len(self.minimal_rules_)}:\n'
+        display += f'> SRules --  Number of Rules: {len(self.rules_)}\n'
+        display += f'> SRules --  Number of Minimal Rules: {len(self.minimal_rules_)}\n'
         display += '> ++++++++++++++++++++++++++++\n'
         return display
 
     def __str__(self):
-        display = self.description()
+        display = self.rules_description()
 
         if not self.minimal_rules_:
-            self.prune_rules()
+            sorted_rules = self.sorting()
+            self.prune_rules(sorted_rules)
 
         for num in range(len(self.minimal_rules_)):
             display += f'{self.minimal_rules_[num]}'
