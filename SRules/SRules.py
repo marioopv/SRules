@@ -3,24 +3,17 @@ import copy
 
 import numpy as np
 from scipy.stats import chi2_contingency, chi2
-from sklearn.base import ClassifierMixin, BaseEstimator
+from sklearn.base import ClassifierMixin
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.utils.validation import check_is_fitted
 from sklearn import preprocessing
-from SRules.utils import FeatureComparer, Node, Pattern, concatenate_query, predict_unique_with_query, divide_chunks, \
-    concatenate_query_comparer, chunk_query
-
+from SRules.utils import FeatureComparer, Node, Pattern, concatenate_query, predict_unique_with_query
 
 def plot_features(X_train_minmax):
     import matplotlib.pyplot as plt
-    # data to be plotted
-    # plotting
-
     plt.title("Features MinMaxScaler")
     plt.xlabel("X MinMaxScaler")
     plt.ylabel("Features")
     plt.plot(X_train_minmax, color="green")
-    # plt.yticks([0, 0.001, 0.01, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
     plt.show()
 
 
@@ -101,16 +94,12 @@ class SRules(ClassifierMixin):
         # Feature Importance list
         self.feature_importance_list = feature_importances
 
-        # Indices de las características mas significativas ordenadas
+        # Índices de las características más significativas ordenadas
         index = np.argsort(self.feature_importance_list)[::-1].tolist()
-        max_coefficient = self.feature_importance_list[index[0]]  # Valor de la característica más importante
 
-        X_train_minmax = self.nomalized_features()
+        X_train_minmax = self.normalized_features()
         if self.display_features:
             plot_features(X_train_minmax)
-
-        # coefficient_threshold = max_coefficient * (1 - self.scale_feature_coefficient)
-        # self.most_important_features_ = [self.feature_names[x] for x in index if self.feature_importance_list[x] >= coefficient_threshold]
 
         self.most_important_features_ = [self.feature_names[x] for x in index if
                                          X_train_minmax[x] >= self.scale_feature_coefficient]
@@ -121,7 +110,7 @@ class SRules(ClassifierMixin):
             print(
                 f'\t Percentage of selected rules: {100 * len(self.most_important_features_) / len(self.feature_importance_list)} %')
 
-    def nomalized_features(self):
+    def normalized_features(self):
         return preprocessing.MinMaxScaler().fit_transform(self.feature_importance_list.reshape(-1, 1))
 
     def obtain_pattern_list_of_valid_nodes_with_pvalue(self):
@@ -195,12 +184,9 @@ class SRules(ClassifierMixin):
                 new_rule = copy.deepcopy(self.pattern_list_valid_nodes[index])
                 new_rule.full_feature_comparer[-1].value = distinct_value
 
+                # Get values for positives and negatives
                 number_negatives = self.count_query_negatives_query(test_data, new_rule.get_full_rule())
                 number_positives = self.count_query_positives_query(test_data, new_rule.get_full_rule())
-
-                # number_negatives = self.count_query_negatives(test_data, new_rule.full_feature_comparer)
-                # number_positives = self.count_query_positives(test_data, new_rule.full_feature_comparer)
-
                 number_positives_and_negatives = number_positives + number_negatives
 
                 # If this rule has existing cases in total in the training set, is included.
@@ -247,7 +233,6 @@ class SRules(ClassifierMixin):
         dataset_filtered = dataset
         return predict_unique_with_query(dataset_filtered, concatenate_query(full_feature_comparer,
                                                                              self.target_class_positive.get_query()))
-        # return chunk_query(dataset_filtered, concatenate_query(full_feature_comparer, self.target_class_positive.get_query()))
 
     def predict_unique_with_query_negatives(self, dataset, feature_comparer):
         dataset_filtered = dataset
@@ -260,7 +245,6 @@ class SRules(ClassifierMixin):
         dataset_filtered = dataset
         return predict_unique_with_query(dataset_filtered, concatenate_query(full_feature_comparer,
                                                                              self.target_class_negative.get_query()))
-        # return chunk_query(dataset_filtered, concatenate_query(full_feature_comparer, self.target_class_negative.get_query()))
 
     def count_query_positives(self, dataset, feature_comparer):
         return len(self.predict_unique_with_query_positives(dataset, feature_comparer))
@@ -435,7 +419,6 @@ class SRules(ClassifierMixin):
         :return:
         @type dataset: dataset
         @type node_dict: object
-        @param node_dic
         @param feature_importances:
         """
         all_covered = False
@@ -483,6 +466,7 @@ class SRules(ClassifierMixin):
         return self
 
     def new_datasets(self, X_train, y_train, dataset, sorting_method):
+        # Get indexes
         y_pred_train_rules = self.predict(X_train, sorting_method)
         filter_indices = np.where(np.array(y_pred_train_rules) == None)[0]
 
@@ -492,12 +476,12 @@ class SRules(ClassifierMixin):
         np_filtered_y_train = np.array(y_train)[filter_indices]
         y_train = np_filtered_y_train
 
-        # new Pandas
+        # new Pandas dataset
         df = dataset.filter(items=filter_indices, axis=0)
         dataset = df
+
         new_len = len(X_train)
         return X_train, y_train, dataset, new_len
-        #return copy.deepcopy(np_filtered_X_train), copy.deepcopy(np_filtered_y_train), copy.deepcopy(df), new_len
 
     def join_all_rules(self):
         for rule_list in self.all_rules_:
