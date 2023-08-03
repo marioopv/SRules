@@ -477,7 +477,7 @@ def kfold_test(X, chi_square_percent_point_function, dataset, min_accuracy_coeff
 
         # Fit model
         rules_start_time = time.time()
-        rules.fit(train_pandas_dataset, ensemble.feature_importances_)
+        rules.fit(X_train, y_train, train_pandas_dataset, ensemble.feature_importances_)
         rules_time = time.time() - rules_start_time
         rules_time_list.append(rules_time)
 

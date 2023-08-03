@@ -10,21 +10,27 @@ n_repeats = 3
 chi_square_percent_point_function_list = [0.95, 0.97, 0.99]
 scale_feature_coefficient_list = [0.05]
 min_accuracy_coefficient_list = [0.95]
-# min_number_class_per_node_list = [1, 3, 5, 7, 10]
-min_number_class_per_node_list = [3, 5, 7]
+# min_number_class_per_node_list = [5, 7, 10]
 sorting_method = "target_accuracy"
 
 # CONFIG
 
 scale_feature_coefficient_list = [0.01]
 min_number_class_per_node_list = [5]
-chi_square_percent_point_function_list = [0.95]
+chi_square_percent_point_function_list = [0.95, 0.97, 0.99]
+min_accuracy_coefficient_list = [0.95]
 
 dataset_names = [
-    "credit"
+    "divorce",
+    "tic-tac-toe",
+    "wisconsin",
+    "salud-covid",
+    "SPECT",
+    "kr-vs-kp",
 ]
-path = f'../..'
-results_file_name = f'{path}/Results/battery_test_all_nodes_credit.csv'
+
+path = f'../../..'
+results_file_name = f'{path}/Tests/battery_test_recursive_all.csv'
 
 f = open(results_file_name, "w")
 file_header = f'Dataset, scorer, Coverage, DT, RF, RF+RFIT, RF+RFIT num rules, RF+RC, RF+RC num rules, RF+Rules, RF+Rules num rules\n'

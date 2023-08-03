@@ -1,7 +1,7 @@
 import pandas as pd
 from sklearn.utils import Bunch
 
-from notebooks.IPRules.test_utils import continuous_to_discrete_column, one_hot_encode_dataframe
+from notebooks.SRules.test_utils import continuous_to_discrete_column, one_hot_encode_dataframe
 
 dataset_names = [
     "divorce",
