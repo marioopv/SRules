@@ -284,7 +284,7 @@ def generate_scores(filtered_y_test, filtered_y_pred_test_ensemble):
     return accuracy, f1_score, precision_score, recall, roc_auc_score
 
 
-def generate_battery_test(f, filename, X, y, dataset, target_value_name, n_splits, n_repeats,
+def generate_battery_test(recursive, classifier, f, filename, X, y, dataset, target_value_name, n_splits, n_repeats,
                           chi_square_percent_point_function,
                           scale_feature_coefficient, min_accuracy_coefficient, min_number_class_per_node,
                           sorting_method):
@@ -296,11 +296,15 @@ def generate_battery_test(f, filename, X, y, dataset, target_value_name, n_split
         rulecosi_accuracy_list, rulecosi_f1_score_list, rulecosi_precision_score_list, rulecosi_recall_list, rulecosi_roc_auc_score_list, \
         rulefit_num_rules_list, rules_num_rules_list, rulecosi_num_rules_list, \
         ensemble_time_list, tree_time_list, RuleFit_time_list, rulecosi_time_list, rules_time_list \
-        = kfold_test(X, chi_square_percent_point_function, dataset, min_accuracy_coefficient,
+        = kfold_test(recursive, classifier, X, chi_square_percent_point_function, dataset, min_accuracy_coefficient,
                      min_number_class_per_node, n_splits, n_repeats, scale_feature_coefficient, sorting_method,
                      target_value_name, y, filename)
 
-    f_score = f'{filename} chi2:{chi_square_percent_point_function} minclass:{min_number_class_per_node}  min_precision:{min_accuracy_coefficient} scale_attr:{scale_feature_coefficient},F1-score,{round(cobertura_list.mean() * 100, 2)}±{round(cobertura_list.std() * 100, 2)}'
+    f_score = f'{filename} chi2:{chi_square_percent_point_function} minclass:{min_number_class_per_node}  min_precision:{min_accuracy_coefficient} scale_attr:{scale_feature_coefficient}'
+    f_score += f',{classifier}'
+    f_score += f',{recursive}'
+    f_score += f',F1-score'
+    f_score += f',{round(cobertura_list.mean() * 100, 2)}±{round(cobertura_list.std() * 100, 2)}'
     f_score += f',{round(tree_f1_score_list.mean() * 100, 2)}±{round(tree_f1_score_list.std() * 100, 2)}'
     f_score += f',{round(ensemble_f1_score_list.mean() * 100, 2)}±{round(ensemble_f1_score_list.std() * 100, 2)}'
     f_score += f',{round(RuleFit_f1_score_list.mean() * 100, 2)}±{round(RuleFit_f1_score_list.std() * 100, 2)}'
@@ -313,7 +317,11 @@ def generate_battery_test(f, filename, X, y, dataset, target_value_name, n_split
     print(f_score)
     f.write(f_score)
 
-    accuracy_score = f'{filename} chi2:{chi_square_percent_point_function} minclass:{min_number_class_per_node}  min_precision:{min_accuracy_coefficient} scale_attr:{scale_feature_coefficient},Accuracy-score,{round(cobertura_list.mean() * 100, 2)}±{round(cobertura_list.std() * 100, 2)}'
+    accuracy_score = f'{filename} chi2:{chi_square_percent_point_function} minclass:{min_number_class_per_node}  min_precision:{min_accuracy_coefficient} scale_attr:{scale_feature_coefficient}'
+    accuracy_score += f',{classifier}'
+    accuracy_score += f',{recursive}'
+    accuracy_score += f',Accuracy-score'
+    accuracy_score += f',{round(cobertura_list.mean() * 100, 2)}±{round(cobertura_list.std() * 100, 2)}'
     accuracy_score += f',{round(tree_accuracy_list.mean() * 100, 2)}±{round(tree_accuracy_list.std() * 100, 2)}'
     accuracy_score += f',{round(ensemble_accuracy_list.mean() * 100, 2)}±{round(ensemble_accuracy_list.std() * 100, 2)}'
     accuracy_score += f',{round(RuleFit_accuracy_list.mean() * 100, 2)}±{round(RuleFit_accuracy_list.std() * 100, 2)}'
@@ -326,7 +334,11 @@ def generate_battery_test(f, filename, X, y, dataset, target_value_name, n_split
     print(accuracy_score)
     f.write(accuracy_score)
 
-    precision_score = f'{filename} chi2:{chi_square_percent_point_function} minclass:{min_number_class_per_node}  min_precision:{min_accuracy_coefficient} scale_attr:{scale_feature_coefficient},Precision-Score,{round(cobertura_list.mean() * 100, 2)}±{round(cobertura_list.std() * 100, 2)}'
+    precision_score = f'{filename} chi2:{chi_square_percent_point_function} minclass:{min_number_class_per_node}  min_precision:{min_accuracy_coefficient} scale_attr:{scale_feature_coefficient}'
+    precision_score += f',{classifier}'
+    precision_score += f',{recursive}'
+    precision_score += f',Precision-Score'
+    precision_score += f',{round(cobertura_list.mean() * 100, 2)}±{round(cobertura_list.std() * 100, 2)}'
     precision_score += f',{round(tree_precision_score_list.mean() * 100, 2)}±{round(tree_precision_score_list.std() * 100, 2)}'
     precision_score += f',{round(ensemble_precision_score_list.mean() * 100, 2)}±{round(ensemble_precision_score_list.std() * 100, 2)}'
     precision_score += f',{round(RuleFit_precision_score_list.mean() * 100, 2)}±{round(RuleFit_precision_score_list.std() * 100, 2)}'
@@ -339,7 +351,11 @@ def generate_battery_test(f, filename, X, y, dataset, target_value_name, n_split
     print(precision_score)
     f.write(precision_score)
 
-    recall = f'{filename} chi2:{chi_square_percent_point_function} minclass:{min_number_class_per_node}  min_precision:{min_accuracy_coefficient} scale_attr:{scale_feature_coefficient},Recall-Score,{round(cobertura_list.mean() * 100, 2)}±{round(cobertura_list.std() * 100, 2)}'
+    recall = f'{filename} chi2:{chi_square_percent_point_function} minclass:{min_number_class_per_node}  min_precision:{min_accuracy_coefficient} scale_attr:{scale_feature_coefficient}'
+    recall += f',{classifier}'
+    recall += f',{recursive}'
+    recall += f',Recall-Score'
+    recall += f',{round(cobertura_list.mean() * 100, 2)}±{round(cobertura_list.std() * 100, 2)}'
     recall += f',{round(tree_recall_list.mean() * 100, 2)}±{round(tree_recall_list.std() * 100, 2)}'
     recall += f',{round(ensemble_recall_list.mean() * 100, 2)}±{round(ensemble_recall_list.std() * 100, 2)}'
     recall += f',{round(RuleFit_recall_list.mean() * 100, 2)}±{round(RuleFit_recall_list.std() * 100, 2)}'
@@ -352,7 +368,11 @@ def generate_battery_test(f, filename, X, y, dataset, target_value_name, n_split
     print(recall)
     f.write(recall)
 
-    time = f'{filename} chi2:{chi_square_percent_point_function} minclass:{min_number_class_per_node}  min_precision:{min_accuracy_coefficient} scale_attr:{scale_feature_coefficient},Time-Score,{round(cobertura_list.mean() * 100, 2)}±{round(cobertura_list.std() * 100, 2)}'
+    time = f'{filename} chi2:{chi_square_percent_point_function} minclass:{min_number_class_per_node}  min_precision:{min_accuracy_coefficient} scale_attr:{scale_feature_coefficient}'
+    time += f',{classifier}'
+    time += f',{recursive}'
+    time += f',Time-Score'
+    time += f',{round(cobertura_list.mean() * 100, 2)}±{round(cobertura_list.std() * 100, 2)}'
     time += f',{round(tree_time_list.mean() * 100, 2)}±{round(tree_time_list.std() * 100, 2)}'
     time += f',{round(ensemble_time_list.mean() * 100, 2)}±{round(ensemble_time_list.std() * 100, 2)}'
     time += f',{round(RuleFit_time_list.mean() * 100, 2)}±{round(RuleFit_time_list.std() * 100, 2)}'
@@ -368,7 +388,7 @@ def generate_battery_test(f, filename, X, y, dataset, target_value_name, n_split
     return f_score, accuracy_score, precision_score, recall
 
 
-def kfold_test(X, chi_square_percent_point_function, dataset, min_accuracy_coefficient,
+def kfold_test(recursive, classifier, X, chi_square_percent_point_function, dataset, min_accuracy_coefficient,
                min_number_class_per_node, n_splits, n_repeats, scale_feature_coefficient, sorting_method,
                target_value_name, y, filename):
     cobertura_list = []
@@ -415,15 +435,21 @@ def kfold_test(X, chi_square_percent_point_function, dataset, min_accuracy_coeff
         param_grid_tree = {
             'max_depth': [2, 3, 4, 5, 6],  # number of minimum samples required at a leaf node.
         }
-        param_grid = {
-            'n_estimators': [10, 25, 50, 100, 250, 500],  # being the number of trees in the forest.
-            'max_depth': [2, 3, 4, 5, 6],  # number of minimum samples required at a leaf node.
-        }
+        from sklearn.ensemble import AdaBoostClassifier
+        if type(classifier) == type(AdaBoostClassifier()):
+            param_grid = {
+                'n_estimators': [10, 25, 50, 100, 250, 500],  # being the number of trees in the forest.
+            }
+        else:
+            param_grid = {
+                'n_estimators': [10, 25, 50, 100, 250, 500],  # being the number of trees in the forest.
+                'max_depth': [2, 3, 4, 5, 6],  # number of minimum samples required at a leaf node.
+            }
 
         # Random Forest
         clf_rf = GridSearchCV(
             # Evaluates the performance of different groups of parameters for a model based on cross-validation.
-            RandomForestClassifier(),
+            classifier,
             param_grid,  # dict of parameters.
             cv=5,  # Specified number of folds in the Cross-Validation(K-Fold).
             scoring=custom_scorer)
@@ -455,7 +481,10 @@ def kfold_test(X, chi_square_percent_point_function, dataset, min_accuracy_coeff
             chi_square_percent_point_function=chi_square_percent_point_function,
             scale_feature_coefficient=scale_feature_coefficient,
             min_accuracy_coefficient=min_accuracy_coefficient,
-            min_number_class_per_node=min_number_class_per_node
+            min_number_class_per_node=min_number_class_per_node,
+            display_features=False,
+            display_logs=False,
+            recursive=recursive
         )
         # Fit model
         start_time = time.time()
@@ -477,7 +506,7 @@ def kfold_test(X, chi_square_percent_point_function, dataset, min_accuracy_coeff
 
         # Fit model
         rules_start_time = time.time()
-        rules.fit(X_train, y_train, train_pandas_dataset, ensemble.feature_importances_)
+        rules.fit(ensemble, X_train, y_train, train_pandas_dataset, ensemble.feature_importances_)
         rules_time = time.time() - rules_start_time
         rules_time_list.append(rules_time)
 
@@ -546,7 +575,7 @@ def kfold_test(X, chi_square_percent_point_function, dataset, min_accuracy_coeff
         tree_recall_list.append(tree_recall)
         tree_roc_auc_score_list.append(tree_roc_auc_score)
         RuleFit_accuracy, RuleFit_f1_score, RuleFit_precision_score, RuleFit_recall, RuleFit_roc_auc_score = \
-                generate_scores(filtered_y_test_int, filtered_y_pred_test_RuleFit)
+            generate_scores(filtered_y_test_int, filtered_y_pred_test_RuleFit)
 
         RuleFit_accuracy_list.append(RuleFit_accuracy)
         RuleFit_f1_score_list.append(RuleFit_f1_score)

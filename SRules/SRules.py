@@ -26,6 +26,7 @@ class SRules(ClassifierMixin):
                  display_features=False,
                  target_true=True,
                  target_false=False,
+                 recursive=False,
                  chi_square_percent_point_function=0.95,
                  scale_feature_coefficient=0.2,
                  min_accuracy_coefficient=0.9,
@@ -50,6 +51,7 @@ class SRules(ClassifierMixin):
         self.min_number_class_per_node = min_number_class_per_node
         self.display_features = display_features
         self.display_logs = display_logs
+        self.recursive = recursive
         self.all_rules_ = []
 
     def get_node(self, ID):
@@ -408,7 +410,7 @@ class SRules(ClassifierMixin):
 
         self.all_rules_.append(self.minimal_rules_)
 
-    def fit(self, X_train, y_train,
+    def fit(self, ensemble, X_train, y_train,
             dataset,
             feature_importances,
             most_important_features=None,
@@ -424,6 +426,14 @@ class SRules(ClassifierMixin):
         all_covered = False
         previous_len = len(X_train)
         print("->TRAINING MODEL")
+
+        if self.recursive is False:
+            self.single_fit(dataset,
+                            feature_importances,
+                            most_important_features=most_important_features,
+                            sorting_method="target_accuracy")
+            return self
+
         counter = 1
         while all_covered is not True:
             print(f'-->FITTING RULES {counter}')
@@ -449,7 +459,6 @@ class SRules(ClassifierMixin):
             previous_len = new_len
 
             ## FIT ENSEMBLE MODEL
-            ensemble = RandomForestClassifier(n_estimators=100, criterion="gini")
             ensemble.fit(X_train, y_train)
             feature_importances = ensemble.feature_importances_
 
