@@ -8,6 +8,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn import preprocessing
 from SRules.utils import FeatureComparer, Node, Pattern, concatenate_query, predict_unique_with_query
 
+
 def plot_features(X_train_minmax):
     import matplotlib.pyplot as plt
     plt.title("Features MinMaxScaler")
@@ -392,6 +393,9 @@ class SRules(ClassifierMixin):
         if not self.most_important_features_:
             self.get_top_important_features_list(feature_importances)
 
+        if self.most_important_features_ is None or []:
+            return
+
         # Lista de nodos válidos
         self.obtain_pattern_list_of_valid_nodes_with_pvalue()
 
@@ -404,7 +408,7 @@ class SRules(ClassifierMixin):
 
         # Sort rules
         sorted_rules = self.sorting(sorting_method)
-        
+
         # Prune rules
         self.prune_rules(sorted_rules)
 
@@ -429,7 +433,7 @@ class SRules(ClassifierMixin):
 
         if self.recursive is False:
             self.single_fit(dataset,
-                            feature_importances,
+                            feature_importances=feature_importances,
                             most_important_features=most_important_features,
                             sorting_method="target_accuracy")
             return self
@@ -439,7 +443,7 @@ class SRules(ClassifierMixin):
             print(f'-->FITTING RULES {counter}')
 
             self.single_fit(dataset,
-                            feature_importances,
+                            feature_importances=feature_importances,
                             most_important_features=most_important_features,
                             sorting_method="target_accuracy")
 
@@ -461,6 +465,7 @@ class SRules(ClassifierMixin):
             ## FIT ENSEMBLE MODEL
             ensemble.fit(X_train, y_train)
             feature_importances = ensemble.feature_importances_
+            most_important_features = None
 
             # Clean variables
             self.clean()

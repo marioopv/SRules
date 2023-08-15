@@ -18,27 +18,29 @@ sorting_method = "target_accuracy"
 # CONFIG
 
 scale_feature_coefficient_list = [0.01]
-min_number_class_per_node_list = [5, 10, 20, 25]
+min_number_class_per_node_list = [5, 10, 20, 25, 30, 50]
 chi_square_percent_point_function_list = [0.99]
 min_accuracy_coefficient_list = [0.95]
 recursive = [True, False]
 
 dataset_names = [
-    "divorce",
-    "tic-tac-toe",
-    "wisconsin",
-    "salud-covid",
-    "SPECT",
+#    "divorce",
+#    "tic-tac-toe",
+#    "wisconsin",
+#    "salud-covid",
+#    "SPECT",
     "kr-vs-kp",
 ]
 # TODO:
-#from catboost import CatBoostClassifier
-#from lightgbm import LGBMClassifier
-classifiers = [GradientBoostingClassifier(), AdaBoostClassifier(), RandomForestClassifier()]
+from catboost import CatBoostClassifier
+from lightgbm import LGBMClassifier
+from xgboost import XGBClassifier
+
+classifiers = [GradientBoostingClassifier(), AdaBoostClassifier(), RandomForestClassifier(), CatBoostClassifier(), XGBClassifier(), LGBMClassifier()]
 
 
 path = f'../../..'
-results_file_name = f'{path}/Tests/battery_test_recursive_RF_all.csv'
+results_file_name = f'{path}/Tests/battery_test_recursive_krvskp_all.csv'
 
 f = open(results_file_name, "w")
 file_header = f'Dataset, classifier, recursive, scorer, Coverage, DT, RF, RF+RFIT, RF+RFIT num rules, RF+RC, RF+RC num rules, RF+Rules, RF+Rules num rules\n'
