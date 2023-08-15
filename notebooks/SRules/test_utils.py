@@ -2,7 +2,10 @@ import copy
 import numpy as np
 import pandas as pd
 import time
+
+from catboost import CatBoostClassifier
 from imodels import RuleFitClassifier
+from lightgbm import LGBMClassifier
 from rulecosi import RuleCOSIClassifier
 from sklearn import metrics
 from sklearn.ensemble import RandomForestClassifier
@@ -11,6 +14,7 @@ from sklearn.model_selection import GridSearchCV, RepeatedStratifiedKFold
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.tree import DecisionTreeClassifier
+from xgboost import XGBClassifier
 
 from SRules.SRules import SRules
 
@@ -440,11 +444,18 @@ def kfold_test(recursive, classifier, X, chi_square_percent_point_function, data
             param_grid = {
                 'n_estimators': [10, 25, 50, 100, 250, 500],  # being the number of trees in the forest.
             }
-        else:
+
+        if type(classifier) == type(RandomForestClassifier()) or type(LGBMClassifier()) or type(XGBClassifier()):
             param_grid = {
                 'n_estimators': [10, 25, 50, 100, 250, 500],  # being the number of trees in the forest.
                 'max_depth': [2, 3, 4, 5, 6],  # number of minimum samples required at a leaf node.
+                'n_jobs': [2]  # threads
             }
+        if type(classifier) == type(CatBoostClassifier()) or type(AdaBoostClassifier()):
+                param_grid = {
+                    'n_estimators': [10, 25, 50, 100, 250, 500],  # being the number of trees in the forest.
+                    'max_depth': [2, 3, 4, 5, 6],  # number of minimum samples required at a leaf node.
+                }
 
         # Random Forest
         clf_rf = GridSearchCV(
