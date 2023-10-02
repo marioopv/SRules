@@ -8,7 +8,7 @@ from imodels import RuleFitClassifier
 from lightgbm import LGBMClassifier
 from rulecosi import RuleCOSIClassifier
 from sklearn import metrics
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, GradientBoostingClassifier
 from sklearn.metrics import make_scorer, accuracy_score, f1_score
 from sklearn.model_selection import GridSearchCV, RepeatedStratifiedKFold
 from sklearn.model_selection import train_test_split
@@ -52,7 +52,7 @@ def one_hot_encode_dataframe(data, feature_names):
     return encoded_pandas_dataset, encoded_feature_names
 
 
-def generate_results(results_file_name, X, y, dataset, test_size,
+def generate_results(recur, classifier, results_file_name, X, y, dataset, test_size,
                      chi_square_percent_point_function,
                      scale_feature_coefficient,
                      min_accuracy_coefficient,
@@ -79,13 +79,13 @@ def generate_results(results_file_name, X, y, dataset, test_size,
         y_train = y.loc[train].to_numpy()
         X_test = X.loc[test].to_numpy()
         y_test = y.loc[test].to_numpy()
-        for_results(X_train, X_test, y_train, y_test, chi_square_percent_point_function, criterion, dataset, f,
+        for_results(recur, classifier, X_train, X_test, y_train, y_test, chi_square_percent_point_function, criterion, dataset, f,
                     min_accuracy_coefficient,
                     min_number_class_per_node, scale_feature_coefficient, sorting_method, test_size)
     f.close()
 
 
-def for_results(X_train, X_test, y_train, y_test, chi_square_percent_point_function, criterion, dataset, f,
+def for_results(recur, classifier, X_train, X_test, y_train, y_test, chi_square_percent_point_function, criterion, dataset, f,
                 min_accuracy_coefficient,
                 min_number_class_per_node, scale_feature_coefficient, sorting_method, test_size):
     train_pandas_dataset = pd.DataFrame(data=np.c_[X_train, y_train],
@@ -109,18 +109,18 @@ def for_results(X_train, X_test, y_train, y_test, chi_square_percent_point_funct
     ruleFit.fit(X_train_int, y_train_int, feature_names=dataset.feature_names)
     y_pred_test_RuleFit = ruleFit.predict(X_test_int)
     for criteria in criterion:
-        generate_results_from_criterion(X_test, X_train, chi_square_percent_point_function, criteria, dataset, f,
+        generate_results_from_criterion(recur, classifier, X_test, X_train, chi_square_percent_point_function, criteria, dataset, f,
                                         min_accuracy_coefficient, min_number_class_per_node, scale_feature_coefficient,
                                         sorting_method, train_pandas_dataset, y_pred_test_RuleFit, y_pred_test_tree,
                                         y_test, y_train)
 
 
-def generate_results_from_criterion(X_test, X_train, chi_square_percent_point_function, criteria, dataset, f,
+def generate_results_from_criterion(recur, classifier, X_test, X_train, chi_square_percent_point_function, criteria, dataset, f,
                                     min_accuracy_coefficient, min_number_class_per_node, scale_feature_coefficient,
                                     sorting_method, train_pandas_dataset, y_pred_test_RuleFit, y_pred_test_tree, y_test,
                                     y_train):
     # ENSEMBLE
-    ensemble = RandomForestClassifier(criterion=criteria)
+    ensemble = classifier
     ensemble.fit(X_train, y_train)
     y_pred_test_ensemble = ensemble.predict(X_test)
 
@@ -134,63 +134,39 @@ def generate_results_from_criterion(X_test, X_train, chi_square_percent_point_fu
 
     for scaler in scale_feature_coefficient:
         for min_class in min_number_class_per_node:
-            # PRECALCULATE DICT IN ORDER TO AVOID RERUNS OF A TIME CONSUMING PART OF THE CODE
-            rules = SRules(
-                feature_names=dataset.feature_names,
-                target_value_name=dataset.target_names,
-                scale_feature_coefficient=scaler,
-                min_number_class_per_node=min_class
-            )
-            dict_nodes, minimal_dataset, most_important_features = rules.generate_nodes(train_pandas_dataset,
-                                                                                        ensemble.feature_importances_)
             for min_accuracy in min_accuracy_coefficient:
                 for chi2 in chi_square_percent_point_function:
-                    new_rules = SRules(
-                        feature_names=dataset.feature_names,
-                        target_value_name=dataset.target_names,
-                        chi_square_percent_point_function=chi2,  # como si fuese la inversa del p-value
-                        scale_feature_coefficient=scaler,  # mas o menos variables
-                        min_accuracy_coefficient=min_accuracy,
-                        # precisión para definir si la regla es positiva o  negativa
-                        min_number_class_per_node=min_class
-                        # al menos cuantos registros tiene que haber para que se pueda definir si es regla
-                    )
-
-                    # Fit model
-                    calculated = new_rules.fit(
-                        dataset=train_pandas_dataset,
-                        feature_importances=ensemble.feature_importances_,
-                        node_dict=copy.deepcopy(dict_nodes),
-                        most_important_features=copy.deepcopy(most_important_features)
-                    )
-
-                    if not calculated:
-                        print("NOT CALCULATED")
-                        continue
-
-                    print_results(X_test, chi2, criteria, f, min_accuracy, min_class, new_rules, rules, scaler,
-                                  sorting_method, y_pred_test_RuleFit, y_pred_test_ensemble, y_pred_test_tree,
-                                  y_test, y_pred_test_rulecosi)
+                    for sorting in sorting_method:
+                        SubrogateRules = SRules(
+                            feature_names=dataset.feature_names,
+                            target_value_name=dataset.target_names,
+                            chi_square_percent_point_function=chi2,
+                            scale_feature_coefficient=scaler,
+                            min_accuracy_coefficient=min_accuracy,
+                            min_number_class_per_node=min_class,
+                            display_features=False,
+                            display_logs=False,
+                            recursive=recur
+                        )
+                        SubrogateRules.fit(ensemble, X_train, y_train, train_pandas_dataset, ensemble.feature_importances_)
+                        y_pred_test_rules = SubrogateRules.predict(X_test, sorting_method=sorting)
 
 
-def print_results(X_test, chi2, criteria, f, min_accuracy, min_class, new_rules, rules, scaler, sorting_method,
-                  y_pred_test_RuleFit, y_pred_test_ensemble, y_pred_test_tree, y_test, y_pred_test_rulecosi):
-    for sorting in sorting_method:
-        if not new_rules.rules_:
-            empty_restuls(chi2, criteria, f, min_accuracy, min_class, scaler, y_test)
-            continue
-        # RULES
-        y_pred_test_rules = new_rules.predict(X_test, sorting_method=sorting)
+                        if not y_pred_test_rules:
+                            print("NOT CALCULATED")
+                            continue
 
-        if len(y_pred_test_rules) == 0:
-            print("0 MATHS IN TEST")
-            empty_restuls(chi2, criteria, f, min_accuracy, min_class, scaler, y_test)
-            continue
-        line_results = generate_line_results(chi2, criteria, min_accuracy, min_class, rules, scaler, sorting,
-                                             y_pred_test_RuleFit, y_pred_test_ensemble, y_pred_test_rules,
-                                             y_pred_test_tree, y_test, y_pred_test_rulecosi)
-        print(line_results)
-        f.write(line_results)
+                        if len(y_pred_test_rules) == 0:
+                            print("0 MATHS IN TEST")
+                            empty_restuls(chi2, criteria, f, min_accuracy, min_class, scaler, y_test)
+                            continue
+
+                        line_results = generate_line_results(chi2, criteria, min_accuracy, min_class, SubrogateRules, scaler,
+                                                             sorting,
+                                                             y_pred_test_RuleFit, y_pred_test_ensemble, y_pred_test_rules,
+                                                             y_pred_test_tree, y_test, y_pred_test_rulecosi)
+                        print(line_results)
+                        f.write(line_results)
 
 
 def empty_restuls(chi2, criteria, f, min_accuracy, min_class, scaler, y_test):
@@ -208,6 +184,10 @@ def generate_line_results(chi2, criteria, min_accuracy, min_class, rules, scaler
                           y_pred_test_ensemble, y_pred_test_rules, y_pred_test_tree, y_test, y_pred_test_rulecosi):
     # TODO: DIVIDE METHODS
     # DATASET CATEGORIZABLES
+
+    if type(y_pred_test_ensemble[0]) == type("False"):
+        y_pred_test_ensemble = np.array(y_pred_test_ensemble, dtype=bool)
+
     np_array_rules = np.array(y_pred_test_rules)
     filter_indices = np.where(np_array_rules != None)[0]
     filtered_y_test = np.array(y_test)[filter_indices].astype('int64')
@@ -439,11 +419,6 @@ def kfold_test(recursive, classifier, X, chi_square_percent_point_function, data
         param_grid_tree = {
             'max_depth': [2, 3, 4, 5, 6],  # number of minimum samples required at a leaf node.
         }
-        from sklearn.ensemble import AdaBoostClassifier
-        if type(classifier) == type(AdaBoostClassifier()):
-            param_grid = {
-                'n_estimators': [10, 25, 50, 100, 250, 500],  # being the number of trees in the forest.
-            }
 
         if type(classifier) == type(RandomForestClassifier()) or type(LGBMClassifier()) or type(XGBClassifier()):
             param_grid = {
@@ -451,12 +426,16 @@ def kfold_test(recursive, classifier, X, chi_square_percent_point_function, data
                 'max_depth': [2, 3, 4, 5, 6],  # number of minimum samples required at a leaf node.
                 'n_jobs': [2]  # threads
             }
-        if type(classifier) == type(CatBoostClassifier()) or type(AdaBoostClassifier()):
-                param_grid = {
-                    'n_estimators': [10, 25, 50, 100, 250, 500],  # being the number of trees in the forest.
-                    'max_depth': [2, 3, 4, 5, 6],  # number of minimum samples required at a leaf node.
-                }
+        if type(classifier) == type(CatBoostClassifier()) or type(GradientBoostingClassifier()):
+            param_grid = {
+                'n_estimators': [10, 25, 50, 100, 250, 500],  # being the number of trees in the forest.
+                'max_depth': [2, 3, 4, 5, 6],  # number of minimum samples required at a leaf node.
+            }
 
+        if type(classifier) == type(AdaBoostClassifier()):
+            param_grid = {
+                'n_estimators': [10, 25, 50, 100, 250, 500],  # being the number of trees in the forest.
+            }
         # Random Forest
         clf_rf = GridSearchCV(
             # Evaluates the performance of different groups of parameters for a model based on cross-validation.
@@ -486,7 +465,7 @@ def kfold_test(recursive, classifier, X, chi_square_percent_point_function, data
         train_pandas_dataset = pd.DataFrame(data=np.c_[X_train, y_train],
                                             columns=list(dataset['feature_names']) + [target_value_name])
 
-        rules = SRules(
+        SubrogateRules = SRules(
             feature_names=dataset.feature_names,
             target_value_name=dataset.target_names,
             chi_square_percent_point_function=chi_square_percent_point_function,
@@ -510,14 +489,14 @@ def kfold_test(recursive, classifier, X, chi_square_percent_point_function, data
 
         # RULECOSI
         rulecosi = RuleCOSIClassifier(
-            base_ensemble=ensemble,
+            #base_ensemble=ensemble,
             conf_threshold=0.9,
             cov_threshold=0.0,
             column_names=dataset.feature_names)
 
         # Fit model
         rules_start_time = time.time()
-        rules.fit(ensemble, X_train, y_train, train_pandas_dataset, ensemble.feature_importances_)
+        SubrogateRules.fit(ensemble, X_train, y_train, train_pandas_dataset, ensemble.feature_importances_)
         rules_time = time.time() - rules_start_time
         rules_time_list.append(rules_time)
 
@@ -542,7 +521,7 @@ def kfold_test(recursive, classifier, X, chi_square_percent_point_function, data
 
         # Predict
         y_pred_test_ensemble = ensemble.predict(X_test)
-        y_pred_test_rules = rules.predict(X_test, sorting_method=sorting_method)
+        y_pred_test_rules = SubrogateRules.predict(X_test, sorting_method=sorting_method)
         y_pred_test_tree = tree.predict(X_test)
 
         y_pred_test_rulecosi = rulecosi.predict(X_test)
@@ -554,6 +533,10 @@ def kfold_test(recursive, classifier, X, chi_square_percent_point_function, data
         filter_indices = np.where(np_array_rules != None)[0]
         filtered_y_test = np.array(y_test)[filter_indices].astype('int64')
         filtered_y_test_int = np.array(y_test_int)[filter_indices].astype('int64')
+
+        if type(y_pred_test_ensemble[0]) == type("False"):
+            y_pred_test_ensemble = np.array(y_pred_test_ensemble, dtype=bool)
+
         filtered_y_pred_test_ensemble = np.array(y_pred_test_ensemble)[filter_indices].astype('int64')
         filtered_y_pred_test_tree = np.array(y_pred_test_tree)[filter_indices].astype('int64')
         filtered_y_pred_test_rules = np.array(y_pred_test_rules)[filter_indices].astype('int64')
@@ -611,7 +594,7 @@ def kfold_test(recursive, classifier, X, chi_square_percent_point_function, data
         rulecosi_recall_list.append(rulecosi_recall)
         rulecosi_roc_auc_score_list.append(rulecosi_roc_auc_score)
 
-        rules_num_rules_list.append(len(rules.minimal_rules_))
+        rules_num_rules_list.append(len(SubrogateRules.minimal_rules_))
         rulecosi_num_rules_list.append(len(rulecosi.simplified_ruleset_.rules))
         rulefit_num_rules_list.append(len(ruleFit.rules_))
 

@@ -275,6 +275,10 @@ class SRules(ClassifierMixin):
         :param parent_node: node of the parent of current node
         :return:
         """
+        if feature_index >= len(self.most_important_features_):
+            # No hay más niveles
+            return
+
         current_feature_name = self.most_important_features_[feature_index]
 
         feature_comparer = FeatureComparer(current_feature_name, '==', node_value)
@@ -342,18 +346,25 @@ class SRules(ClassifierMixin):
         if not self.most_important_features_:
             self.get_top_important_features_list(feature_importances)
 
+        if self.most_important_features_ is None or []:
+            return None, None, None
+
         # Generate Tree
+
         _, minimal_dataset = self.generate_tree(dataset=dataset)
         return self.nodes_dict, minimal_dataset, self.most_important_features_
 
     def generate_tree(self, dataset):
         # Genera el árbol binario y obtiene las combinaciones que indican que hay un patrón:
 
-        if self.most_important_features_ is None:
-            return False
+        if self.most_important_features_ is [] or None or len(self.most_important_features_) == 0:
+            return False, dataset
 
         minimal_dataset = copy.deepcopy(dataset[self.define_minimal_columns()])
         minimal_dataset.sort_values(self.most_important_features_, inplace=True, ascending=True)
+
+        if minimal_dataset is [] or None or len(minimal_dataset) == 0:
+            return False, dataset
 
         if self.display_logs:
             print("->Generate new tree based on list")
@@ -388,7 +399,9 @@ class SRules(ClassifierMixin):
 
         # if dict is null calculate it
         if not self.nodes_dict:
-            _, minimal_dataset, _ = self.generate_nodes(dataset, feature_importances)
+            _, minimal_dataset, _1 = self.generate_nodes(dataset, feature_importances)
+            if minimal_dataset is None and _ is None and _1 is None:
+                return
 
         if not self.most_important_features_:
             self.get_top_important_features_list(feature_importances)
@@ -399,9 +412,12 @@ class SRules(ClassifierMixin):
         # Lista de nodos válidos
         self.obtain_pattern_list_of_valid_nodes_with_pvalue()
 
-        if minimal_dataset is None:
+        if self.most_important_features_ is None or []:
             minimal_dataset = copy.deepcopy(dataset[self.define_minimal_columns()])
             minimal_dataset.sort_values(self.most_important_features_, inplace=True, ascending=True)
+
+        if minimal_dataset is None or []:
+            return
 
         # Categoriza patrones
         self.categorize_patterns(minimal_dataset)
@@ -415,7 +431,7 @@ class SRules(ClassifierMixin):
         self.all_rules_.append(self.minimal_rules_)
 
     def fit(self, ensemble, X_train, y_train,
-            dataset,
+            original_dataset,
             feature_importances,
             most_important_features=None,
             sorting_method="target_accuracy"):
@@ -427,6 +443,9 @@ class SRules(ClassifierMixin):
         @type node_dict: object
         @param feature_importances:
         """
+        dataset = copy.deepcopy(original_dataset)
+        X_train = copy.deepcopy(X_train)
+        y_train = copy.deepcopy(y_train)
         all_covered = False
         previous_len = len(X_train)
         print("->TRAINING MODEL")
@@ -462,6 +481,9 @@ class SRules(ClassifierMixin):
                 all_covered = True
             previous_len = new_len
 
+            print(f'len:{new_len}')
+            print(X_train.shape)
+            print(y_train.shape)
             ## FIT ENSEMBLE MODEL
             ensemble.fit(X_train, y_train)
             feature_importances = ensemble.feature_importances_
