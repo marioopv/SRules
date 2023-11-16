@@ -1,24 +1,26 @@
 import time
 import copy
-
 import numpy as np
 from scipy.stats import chi2_contingency, chi2
 from sklearn.base import ClassifierMixin
-from sklearn.ensemble import RandomForestClassifier
-from sklearn import preprocessing
-from SRules.utils import FeatureComparer, Node, Pattern, concatenate_query, predict_unique_with_query
+
+from SRules.FeatureComparer import FeatureComparer
+from SRules.Node import Node
+from SRules.Pattern import Pattern
+import SRules.Utils.QueryUtils as q
+import SRules.Utils.FeatureImportance as FeatureImportance
+from SRules.Utils import RulesUtils, DatasetUtils
 
 
-def plot_features(X_train_minmax):
-    import matplotlib.pyplot as plt
-    plt.title("Features MinMaxScaler")
-    plt.xlabel("X MinMaxScaler")
-    plt.ylabel("Features")
-    plt.plot(X_train_minmax, color="green")
-    plt.show()
-
+# TODO: MOVE STATIC METHODS TO OTHER FILES
+# FETURE IMPORTANCE
 
 class SRules(ClassifierMixin):
+    display_logs: bool
+    display_features: bool
+    target_true: bool
+    target_false: bool
+    recursive: bool
 
     def __init__(self,
                  feature_names,
@@ -35,7 +37,7 @@ class SRules(ClassifierMixin):
                  ):
         self.rules_ = []
         self.minimal_rules_ = []
-        self.feature_importance_list = None
+        self.feature_importances = None
         self.most_important_features_ = None
         self.nodes_dict = {}
         self.nodes_dict_ids = []
@@ -55,8 +57,8 @@ class SRules(ClassifierMixin):
         self.recursive = recursive
         self.all_rules_ = []
 
-    def get_node(self, ID):
-        return self.nodes_dict[ID]
+    def get_node(self, node_id):
+        return self.nodes_dict[node_id]
 
     def parent_relation_matrix(self, children):
         # (Recordar que solo busco nodos padre para calcular el chi-square del total de sus hijos)
@@ -81,42 +83,7 @@ class SRules(ClassifierMixin):
 
         return chi2_results.statistic, chi2_results.pvalue, chi2_results.dof, chi2_results.expected_freq, chi2_critical_value
 
-    def get_top_important_features_list(self, feature_importances):
-        """
-        Obtiene las características más importantes en orden descendente
-        :return:
-        :param coefficient: Coeficiente entre 0 y 1 usado para obtener un % de las características más importantes.
-        :param feature_names: Lista de los nombres de las columnas del dataset.
-        :param feature_importances: Valor de importancia asociado a cada característica en el modelo entrenado.
-        :return: Ordered feature list
-        """
-
-        if self.display_logs:
-            print("->Extract feature importance list")
-
-        # Feature Importance list
-        self.feature_importance_list = feature_importances
-
-        # Índices de las características más significativas ordenadas
-        index = np.argsort(self.feature_importance_list)[::-1].tolist()
-
-        X_train_minmax = self.normalized_features()
-        if self.display_features:
-            plot_features(X_train_minmax)
-
-        self.most_important_features_ = [self.feature_names[x] for x in index if
-                                         X_train_minmax[x] >= self.scale_feature_coefficient]
-
-        if self.display_logs:
-            print(f'\t Original features {len(self.feature_importance_list)}')
-            print(f'\t Selected features {len(self.most_important_features_)}')
-            print(
-                f'\t Percentage of selected rules: {100 * len(self.most_important_features_) / len(self.feature_importance_list)} %')
-
-    def normalized_features(self):
-        return preprocessing.MinMaxScaler().fit_transform(self.feature_importance_list.reshape(-1, 1))
-
-    def obtain_pattern_list_of_valid_nodes_with_pvalue(self):
+    def obtain_pattern_list_of_valid_nodes_with_p_value(self):
         """
         Construct the list of rules based on the chi square of their sons
         @return: pattern_list_valid_nodes
@@ -131,9 +98,9 @@ class SRules(ClassifierMixin):
         for key, node in self.nodes_dict.items():
             if node.children is None:
                 continue
-            if node.ID in visited_nodes:
+            if node.node_id in visited_nodes:
                 continue
-            visited_nodes.append(node.ID)
+            visited_nodes.append(node.node_id)
             # Obtiene la lista de IDs de sus nodos hermanos
             children = node.children
             # En el caso de que ese nodo no sea un nodo hoja
@@ -188,8 +155,10 @@ class SRules(ClassifierMixin):
                 new_rule.full_feature_comparer[-1].value = distinct_value
 
                 # Get values for positives and negatives
-                number_negatives = self.count_query_negatives_query(test_data, new_rule.get_full_rule())
-                number_positives = self.count_query_positives_query(test_data, new_rule.get_full_rule())
+                number_negatives = q.count_query_negatives_query(test_data, new_rule.get_full_rule(),
+                                                                 self.target_class_negative)
+                number_positives = q.count_query_positives_query(test_data, new_rule.get_full_rule(),
+                                                                 self.target_class_positive)
                 number_positives_and_negatives = number_positives + number_negatives
 
                 # If this rule has existing cases in total in the training set, is included.
@@ -225,42 +194,6 @@ class SRules(ClassifierMixin):
 
         return self.rules_
 
-    def predict_unique_with_query_positives(self, dataset, feature_comparer):
-        dataset_filtered = dataset
-        for comparer in feature_comparer:
-            dataset_filtered = comparer.unitary_loc(dataset_filtered)
-        dataset_filtered = self.target_class_positive.unitary_loc(dataset_filtered)
-        return dataset_filtered
-
-    def predict_unique_with_query_positives_query(self, dataset, full_feature_comparer):
-        dataset_filtered = dataset
-        return predict_unique_with_query(dataset_filtered, concatenate_query(full_feature_comparer,
-                                                                             self.target_class_positive.get_query()))
-
-    def predict_unique_with_query_negatives(self, dataset, feature_comparer):
-        dataset_filtered = dataset
-        for comparer in feature_comparer:
-            dataset_filtered = comparer.unitary_loc(dataset_filtered)
-        dataset_filtered = self.target_class_negative.unitary_loc(dataset_filtered)
-        return dataset_filtered
-
-    def predict_unique_with_query_negatives_query(self, dataset, full_feature_comparer):
-        dataset_filtered = dataset
-        return predict_unique_with_query(dataset_filtered, concatenate_query(full_feature_comparer,
-                                                                             self.target_class_negative.get_query()))
-
-    def count_query_positives(self, dataset, feature_comparer):
-        return len(self.predict_unique_with_query_positives(dataset, feature_comparer))
-
-    def count_query_negatives(self, dataset, feature_comparer):
-        return len(self.predict_unique_with_query_negatives(dataset, feature_comparer))
-
-    def count_query_positives_query(self, dataset, full_query):
-        return len(self.predict_unique_with_query_positives_query(dataset, full_query))
-
-    def count_query_negatives_query(self, dataset, full_query):
-        return len(self.predict_unique_with_query_negatives_query(dataset, full_query))
-
     def binary_tree_generator(self,
                               dataset,
                               node_value=0,
@@ -285,14 +218,14 @@ class SRules(ClassifierMixin):
         # Caso base para el que se considera como nodo padre de todos.
         if parent_node is None:
             # Create Node
-            current_node = Node(ID=0,
-                                PARENT_ID=None,
-                                number_positives=self.count_query_negatives_query(dataset, ''),
-                                number_negatives=self.count_query_negatives_query(dataset, ''),
+            current_node = Node(node_id=0,
+                                parent_id=None,
+                                number_positives=q.count_query_positives_query(dataset, '', self.target_class_positive),
+                                number_negatives=q.count_query_negatives_query(dataset, '', self.target_class_negative),
                                 full_feature_comparer=[])
             # Incluye el nodo en la lista
-            self.nodes_dict[current_node.ID] = current_node
-            self.nodes_dict_ids.append(current_node.ID)
+            self.nodes_dict[current_node.node_id] = current_node
+            self.nodes_dict_ids.append(current_node.node_id)
 
             # Una vez creado el padre, se accede a la primera característica, que representaría el primer nivel.
             # Por cada posible valor que pueda tomar esa característica, se crea un hijo nodo de manera recursiva
@@ -301,13 +234,11 @@ class SRules(ClassifierMixin):
 
         # Caso en el que el padre ya ha sido creado
         else:
-            full_rule_query = concatenate_query(parent_node.get_full_query(), feature_comparer.get_query())
-            number_negatives = self.count_query_negatives_query(dataset, full_rule_query)
-            number_positives = self.count_query_positives_query(dataset, full_rule_query)
+            full_rule_query = q.concatenate_query(parent_node.get_full_query(), feature_comparer.get_query())
+            number_negatives = q.count_query_negatives_query(dataset, full_rule_query, self.target_class_negative)
+            number_positives = q.count_query_positives_query(dataset, full_rule_query, self.target_class_positive)
 
             full_comparer = parent_node.full_feature_comparer + [feature_comparer]
-            # number_negatives = self.count_query_negatives(dataset, full_comparer)
-            # number_positives = self.count_query_positives(dataset, full_comparer)
 
             node_values_total = number_negatives + number_positives
             # Si el nodo se considera que no tiene los casos suficientes,
@@ -316,19 +247,19 @@ class SRules(ClassifierMixin):
                 # Se le asigna la ID al nodo como la siguiente a la última utilizada.
 
                 node_dict_ID = self.nodes_dict_ids[-1] + 1
-                current_node = Node(ID=node_dict_ID,
-                                    PARENT_ID=parent_node.ID,
+                current_node = Node(node_id=node_dict_ID,
+                                    parent_id=parent_node.node_id,
                                     number_negatives=number_negatives,
                                     number_positives=number_positives,
                                     full_feature_comparer=full_comparer
                                     )
 
                 # Incluye el nodo en la lista
-                self.nodes_dict[current_node.ID] = current_node
-                self.nodes_dict_ids.append(current_node.ID)
+                self.nodes_dict[current_node.node_id] = current_node
+                self.nodes_dict_ids.append(current_node.node_id)
 
                 # La ID del nodo es incluida en la lista de hijos del padre.
-                self.nodes_dict[parent_node.ID].children.append(node_dict_ID)
+                self.nodes_dict[parent_node.node_id].children.append(node_dict_ID)
 
                 # new_dataset = dataset.loc[:, dataset.columns != current_feature_name]
                 new_feature_index = feature_index + 1
@@ -344,7 +275,12 @@ class SRules(ClassifierMixin):
     def generate_nodes(self, dataset, feature_importances):
         # List of top % important features in the model are obtained. This % regulated by coefficient between [0,1].
         if not self.most_important_features_:
-            self.get_top_important_features_list(feature_importances)
+            self.most_important_features_, self.feature_importances = FeatureImportance.get_top_important_features_list(
+                feature_importances,
+                self.feature_names,
+                self.scale_feature_coefficient,
+                self.display_logs,
+                self.display_features)
 
         if self.most_important_features_ is None or []:
             return None, None, None
@@ -379,7 +315,10 @@ class SRules(ClassifierMixin):
     def define_minimal_columns(self):
         return self.most_important_features_ + [self.target_value_name]
 
-    def single_fit(self, dataset, feature_importances, node_dict=None, most_important_features=None,
+    def single_fit(self, dataset,
+                   feature_importances,
+                   node_dict=None,
+                   most_important_features=None,
                    sorting_method="target_accuracy"):
         """
         Get list of top features and generate rules
@@ -404,13 +343,18 @@ class SRules(ClassifierMixin):
                 return
 
         if not self.most_important_features_:
-            self.get_top_important_features_list(feature_importances)
+            self.most_important_features_, self.feature_importances = FeatureImportance.get_top_important_features_list(
+                feature_importances,
+                self.feature_names,
+                self.scale_feature_coefficient,
+                self.display_logs,
+                self.display_features)
 
         if self.most_important_features_ is None or []:
             return
 
         # Lista de nodos válidos
-        self.obtain_pattern_list_of_valid_nodes_with_pvalue()
+        self.obtain_pattern_list_of_valid_nodes_with_p_value()
 
         if self.most_important_features_ is None or []:
             minimal_dataset = copy.deepcopy(dataset[self.define_minimal_columns()])
@@ -422,18 +366,18 @@ class SRules(ClassifierMixin):
         # Categoriza patrones
         self.categorize_patterns(minimal_dataset)
 
-        # Sort rules
-        sorted_rules = self.sorting(sorting_method)
-
-        # Prune rules
-        self.prune_rules(sorted_rules)
+        # Sort rules AND Prune rules
+        self.minimal_rules_ = RulesUtils.prune_rules(self.minimal_rules_, self.sorting(sorting_method), self.display_logs)
 
         self.all_rules_.append(self.minimal_rules_)
 
-    def fit(self, ensemble, X_train, y_train,
+        return self
+
+    def fit(self, method, X_train, y_train,
             original_dataset,
-            feature_importances,
-            most_important_features=None,
+            most_important_features=None,  # TODO: remove
+            use_shap=False,
+            use_lime=False,
             sorting_method="target_accuracy"):
         """
         Get list of top features and generate rules
@@ -446,18 +390,24 @@ class SRules(ClassifierMixin):
         dataset = copy.deepcopy(original_dataset)
         X_train = copy.deepcopy(X_train)
         y_train = copy.deepcopy(y_train)
-        all_covered = False
-        previous_len = len(X_train)
+        feature_importances = FeatureImportance.extract_feature_importances(method, X_train, use_shap, use_lime)
+
         print("->TRAINING MODEL")
 
         if self.recursive is False:
-            self.single_fit(dataset,
-                            feature_importances=feature_importances,
-                            most_important_features=most_important_features,
-                            sorting_method="target_accuracy")
-            return self
+            return self.single_fit(dataset,
+                                   feature_importances=feature_importances,
+                                   most_important_features=most_important_features,
+                                   sorting_method="target_accuracy")
 
+        return self.recursive_fit(X_train, dataset, feature_importances, method, most_important_features,
+                                  sorting_method, use_lime, use_shap, y_train)
+
+    def recursive_fit(self, X_train, dataset, feature_importances, method, most_important_features, sorting_method,
+                      use_lime, use_shap, y_train):
+        all_covered = False
         counter = 1
+        previous_len = len(X_train)
         while all_covered is not True:
             print(f'-->FITTING RULES {counter}')
 
@@ -466,15 +416,24 @@ class SRules(ClassifierMixin):
                             most_important_features=most_important_features,
                             sorting_method="target_accuracy")
 
+            # predict
+            y_pred_train_rules = self.predict(X_train, sorting_method)
+
             # New datasets
-            X_train, y_train, dataset, new_len = self.new_datasets(X_train, y_train, dataset, sorting_method)
+            X_train, y_train, dataset, new_len = DatasetUtils.new_datasets(X_train, y_train, y_pred_train_rules,
+                                                                           dataset)
+
+
 
             if self.display_logs:
                 display = ""
                 display += f'---> Previous dataset length: {previous_len}\n'
                 display += f'---> New dataset length: {new_len}\n'
                 print(display)
+                self.minimal_rules_ = RulesUtils.prune_rules(self.minimal_rules_, self.rules_, self.display_logs)
                 print(self.rules_description())
+
+            # CHECK empty
             if new_len == 0:
                 break
             if previous_len == new_len:
@@ -484,9 +443,10 @@ class SRules(ClassifierMixin):
             print(f'len:{new_len}')
             print(X_train.shape)
             print(y_train.shape)
-            ## FIT ENSEMBLE MODEL
-            ensemble.fit(X_train, y_train)
-            feature_importances = ensemble.feature_importances_
+
+            # FIT ENSEMBLE MODEL
+            method.fit(X_train, y_train)
+            feature_importances = FeatureImportance.extract_feature_importances(method, X_train, use_shap, use_lime)
             most_important_features = None
 
             # Clean variables
@@ -494,80 +454,22 @@ class SRules(ClassifierMixin):
             counter += 1
 
         # Join Rules
-        self.join_all_rules()
-
+        self.rules_ = RulesUtils.join_all_rules(self.all_rules_)
         # Prune rules
-        self.prune_rules(self.rules_)
+        self.minimal_rules_ = RulesUtils.prune_rules(self.minimal_rules_, self.rules_, self.display_logs)
 
         return self
 
-    def new_datasets(self, X_train, y_train, dataset, sorting_method):
-        # Get indexes
-        y_pred_train_rules = self.predict(X_train, sorting_method)
-        filter_indices = np.where(np.array(y_pred_train_rules) == None)[0]
-
-        # new X_train
-        np_filtered_X_train = np.array(X_train)[filter_indices]
-        X_train = np_filtered_X_train
-        np_filtered_y_train = np.array(y_train)[filter_indices]
-        y_train = np_filtered_y_train
-
-        # new Pandas dataset
-        df = dataset.filter(items=filter_indices, axis=0)
-        dataset = df
-
-        new_len = len(X_train)
-        return X_train, y_train, dataset, new_len
-
-    def join_all_rules(self):
-        for rule_list in self.all_rules_:
-            for rule in rule_list:
-                self.rules_.append(rule)
+    # TODO: Extract TO STATIC?
 
     def clean(self):
         self.rules_ = []
         self.minimal_rules_ = []
-        self.feature_importance_list = None
+        self.feature_importances = None
         self.nodes_dict = {}
         self.nodes_dict_ids = []
         self.pattern_list_valid_nodes = []
         self.most_important_features_ = []
-
-    def prune_rules(self, sorted_rules):
-        start_time = time.time()
-        if self.display_logs:
-            print("->Prune Rules")
-
-        for idx, current_rule in reversed(list(enumerate(sorted_rules))):
-            current_full_rule = current_rule.get_full_rule()
-            should_include = True
-            for new_index in range(len(sorted_rules) - 1, idx, -1):
-                new_current_full_rule = sorted_rules[new_index].get_full_rule()
-                if current_full_rule in new_current_full_rule:
-                    # no valida
-                    should_include = False
-                    break
-            if should_include:
-                self.minimal_rules_.append(current_rule)
-
-        elapsed_time = time.time() - start_time
-        if self.display_logs:
-            print(f"Elapsed time to compute the prune_rules: {elapsed_time:.3f} seconds")
-        self.minimal_rules_.reverse()
-        return self.minimal_rules_
-
-    def sorting(self, sorting_method="target_accuracy"):
-        match sorting_method:
-            case "target_accuracy":
-                return sorted(self.rules_, key=lambda r: r.target_accuracy, reverse=True)
-            case "complexity":
-                return sorted(self.rules_, key=lambda r: r.get_complexity(), reverse=True)
-            case "p_value":
-                return sorted(self.rules_, key=lambda r: r.p_value)
-            case "chi2_statistic":
-                return sorted(self.rules_, key=lambda r: r.chi2_statistic, reverse=True)
-            case default:
-                return sorted(self.rules_, key=lambda r: r.target_accuracy, reverse=True)
 
     def predict(self, X, sorting_method="target_accuracy"):
         """
@@ -596,8 +498,7 @@ class SRules(ClassifierMixin):
         predictions = []
 
         if not self.minimal_rules_:
-            sorted_rules = self.sorting(sorting_method)
-            self.prune_rules(sorted_rules)
+            self.minimal_rules_ = RulesUtils.prune_rules(self.sorting(sorting_method), self.display_logs)
 
         for x in X:
             categorize_rule = None
@@ -612,6 +513,19 @@ class SRules(ClassifierMixin):
 
         return predictions
 
+    def sorting(self, sorting_method="target_accuracy"):
+        match sorting_method:
+            case "target_accuracy":
+                return sorted(self.rules_, key=lambda r: r.target_accuracy, reverse=True)
+            case "complexity":
+                return sorted(self.rules_, key=lambda r: r.get_complexity(), reverse=True)
+            case "p_value":
+                return sorted(self.rules_, key=lambda r: r.p_value)
+            case "chi2_statistic":
+                return sorted(self.rules_, key=lambda r: r.chi2_statistic, reverse=True)
+            case default:
+                return sorted(self.rules_, key=lambda r: r.target_accuracy, reverse=True)
+
     def rules_description(self):
         display = '> ++++++++++++++++++++++++++++\n'
         display += f'> SRules --  Number of Rules: {len(self.rules_)}\n'
@@ -623,8 +537,7 @@ class SRules(ClassifierMixin):
         display = self.rules_description()
 
         if not self.minimal_rules_:
-            sorted_rules = self.sorting()
-            self.prune_rules(sorted_rules)
+            self.minimal_rules_ = RulesUtils.prune_rules(self.sorting(), self.display_logs)
 
         for num in range(len(self.minimal_rules_)):
             display += f'{self.minimal_rules_[num]}'
