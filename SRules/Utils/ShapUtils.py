@@ -34,6 +34,7 @@ def extract_feature_importance_shap(method, X_train):
 
     # MODEL NEURAL NETWORK
     # DeepExplainer
+    # https://github.com/shap/shap/blob/master/notebooks/genomic_examples/DeepExplainer%20Genomics%20Example.ipynb
     # https://shap.readthedocs.io/en/latest/example_notebooks/tabular_examples/neural_networks/Census%20income%20classification%20with%20Keras.html
     # GradientExplainer
 
