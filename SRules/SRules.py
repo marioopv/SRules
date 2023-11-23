@@ -37,7 +37,7 @@ class SRules(ClassifierMixin):
                  ):
         self.rules_ = []
         self.minimal_rules_ = []
-        self.feature_importances = None
+        self.feature_importance = None
         self.most_important_features_ = None
         self.nodes_dict = {}
         self.nodes_dict_ids = []
@@ -274,8 +274,8 @@ class SRules(ClassifierMixin):
 
     def generate_nodes(self, dataset, feature_importances):
         # List of top % important features in the model are obtained. This % regulated by coefficient between [0,1].
-        if not self.most_important_features_:
-            self.most_important_features_, self.feature_importances = FeatureImportance.get_top_important_features_list(
+        if self.most_important_features_ is None or []:
+            self.most_important_features_, self.feature_importance = FeatureImportance.get_top_important_features_list(
                 feature_importances,
                 self.feature_names,
                 self.scale_feature_coefficient,
@@ -293,6 +293,7 @@ class SRules(ClassifierMixin):
     def generate_tree(self, dataset):
         # Genera el árbol binario y obtiene las combinaciones que indican que hay un patrón:
 
+        # TODO: GENERATE METHOD TO minimal_dataset
         if self.most_important_features_ is [] or None or len(self.most_important_features_) == 0:
             return False, dataset
 
@@ -316,9 +317,8 @@ class SRules(ClassifierMixin):
         return self.most_important_features_ + [self.target_value_name]
 
     def single_fit(self, dataset,
-                   feature_importances,
+                   feature_importance,
                    node_dict=None,
-                   most_important_features=None,
                    sorting_method="target_accuracy"):
         """
         Get list of top features and generate rules
@@ -327,24 +327,22 @@ class SRules(ClassifierMixin):
         @type dataset: dataset
         @type node_dict: object
         @param node_dic
-        @param feature_importances:
+        @param feature_importance:
         """
+
         minimal_dataset = None
         if node_dict is not None:
             self.nodes_dict = node_dict
 
-        if most_important_features is not None:
-            self.most_important_features_ = most_important_features
-
         # if dict is null calculate it
         if not self.nodes_dict:
-            _, minimal_dataset, _1 = self.generate_nodes(dataset, feature_importances)
+            _, minimal_dataset, _1 = self.generate_nodes(dataset, feature_importance)
             if minimal_dataset is None and _ is None and _1 is None:
                 return
 
-        if not self.most_important_features_:
-            self.most_important_features_, self.feature_importances = FeatureImportance.get_top_important_features_list(
-                feature_importances,
+        if self.most_important_features_ is None or []:
+            self.most_important_features_, self.feature_importance = FeatureImportance.get_top_important_features_list(
+                feature_importance,
                 self.feature_names,
                 self.scale_feature_coefficient,
                 self.display_logs,
@@ -356,7 +354,8 @@ class SRules(ClassifierMixin):
         # Lista de nodos válidos
         self.obtain_pattern_list_of_valid_nodes_with_p_value()
 
-        if self.most_important_features_ is None or []:
+        # TODO: GENERATE METHOD TO minimal_dataset
+        if self.most_important_features_ is not None or []:
             minimal_dataset = copy.deepcopy(dataset[self.define_minimal_columns()])
             minimal_dataset.sort_values(self.most_important_features_, inplace=True, ascending=True)
 
@@ -367,97 +366,119 @@ class SRules(ClassifierMixin):
         self.categorize_patterns(minimal_dataset)
 
         # Sort rules AND Prune rules
-        self.minimal_rules_ = RulesUtils.prune_rules(self.minimal_rules_, self.sorting(sorting_method), self.display_logs)
+        self.minimal_rules_ = RulesUtils.prune_rules(self.minimal_rules_,
+                                                     self.sorting(sorting_method),
+                                                     self.display_logs)
 
         self.all_rules_.append(self.minimal_rules_)
 
         return self
 
-    def fit(self, method, X_train, y_train,
+    def fit(self,
+            method,
+            X_train,
+            y_train,
             original_dataset,
-            most_important_features=None,  # TODO: remove
             use_shap=False,
             use_lime=False,
             sorting_method="target_accuracy"):
         """
         Get list of top features and generate rules
-        :param dataset:
-        :return:
-        @type dataset: dataset
-        @type node_dict: object
-        @param feature_importances:
+        Parameters
+        ----------
+        original_dataset
+        method
+        X_train : object
+        y_train
         """
+        print("INIT")
+
         dataset = copy.deepcopy(original_dataset)
         X_train = copy.deepcopy(X_train)
         y_train = copy.deepcopy(y_train)
-        feature_importances = FeatureImportance.extract_feature_importances(method, X_train, use_shap, use_lime)
 
-        print("->TRAINING MODEL")
+        self.feature_importance = FeatureImportance.extract_feature_importance(method, X_train, use_shap, use_lime)
+
+        print(" -> TRAINING MODEL")
 
         if self.recursive is False:
-            return self.single_fit(dataset,
-                                   feature_importances=feature_importances,
-                                   most_important_features=most_important_features,
-                                   sorting_method="target_accuracy")
-
-        return self.recursive_fit(X_train, dataset, feature_importances, method, most_important_features,
-                                  sorting_method, use_lime, use_shap, y_train)
-
-    def recursive_fit(self, X_train, dataset, feature_importances, method, most_important_features, sorting_method,
-                      use_lime, use_shap, y_train):
-        all_covered = False
-        counter = 1
-        previous_len = len(X_train)
-        while all_covered is not True:
-            print(f'-->FITTING RULES {counter}')
-
-            self.single_fit(dataset,
-                            feature_importances=feature_importances,
-                            most_important_features=most_important_features,
+            print(" --> SINGLE FIT")
+            return self.single_fit(dataset=dataset,
+                            feature_importance=self.feature_importance,
                             sorting_method="target_accuracy")
 
+        print(" --> RECURSIVE FIT")
+        return self.recursive_fit(X_train=X_train,
+                                  dataset=dataset,
+                                  method=method,
+                                  sorting_method=sorting_method,
+                                  use_lime=use_lime,
+                                  use_shap=use_shap,
+                                  y_train=y_train)
+
+    def recursive_fit(self,
+                      X_train,
+                      dataset,
+                      method,
+                      sorting_method,
+                      use_lime,
+                      use_shap,
+                      y_train):
+
+        recursive_counter = 1
+        previous_dataset_len = len(X_train)
+        feature_importance = self.feature_importance
+
+        print(" ---> Fitting Recursive Model")
+        while True:
+            print(f" ----> Step: {recursive_counter}")
+            self.single_fit(dataset,
+                            feature_importance=feature_importance,
+                            sorting_method="target_accuracy")
+
+            print(f" ----> {recursive_counter} - Model Prediction")
             # predict
             y_pred_train_rules = self.predict(X_train, sorting_method)
 
             # New datasets
-            X_train, y_train, dataset, new_len = DatasetUtils.new_datasets(X_train, y_train, y_pred_train_rules,
-                                                                           dataset)
+            print(f" ----> {recursive_counter} - Creating new dataset")
+            X_train, y_train, dataset, new_len = (DatasetUtils
+                                                  .new_datasets(X_train=X_train,
+                                                                y_train=y_train,
+                                                                y_pred_train_rules=y_pred_train_rules,
+                                                                dataset=dataset))
 
-
+            print(f' ----> {recursive_counter} - Previous dataset length: {previous_dataset_len}')
+            print(f' ----> {recursive_counter} - New dataset length: {new_len}')
 
             if self.display_logs:
-                display = ""
-                display += f'---> Previous dataset length: {previous_len}\n'
-                display += f'---> New dataset length: {new_len}\n'
-                print(display)
-                self.minimal_rules_ = RulesUtils.prune_rules(self.minimal_rules_, self.rules_, self.display_logs)
                 print(self.rules_description())
 
-            # CHECK empty
-            if new_len == 0:
+            # No improvement or
+            if new_len == 0 or previous_dataset_len == new_len:
+                print(" ---> Finishing fitting model")
                 break
-            if previous_len == new_len:
-                all_covered = True
-            previous_len = new_len
+            previous_dataset_len = new_len
 
-            print(f'len:{new_len}')
-            print(X_train.shape)
-            print(y_train.shape)
-
-            # FIT ENSEMBLE MODEL
+            print(f" ----> {recursive_counter} - Fitting method")
             method.fit(X_train, y_train)
-            feature_importances = FeatureImportance.extract_feature_importances(method, X_train, use_shap, use_lime)
-            most_important_features = None
+
+            print(f" ----> {recursive_counter} - Feature importance")
+            feature_importance = FeatureImportance.extract_feature_importance(method, X_train, use_shap, use_lime)
 
             # Clean variables
             self.clean()
-            counter += 1
+            recursive_counter += 1
 
         # Join Rules
+        print(" ---> Joining all rules")
         self.rules_ = RulesUtils.join_all_rules(self.all_rules_)
         # Prune rules
-        self.minimal_rules_ = RulesUtils.prune_rules(self.minimal_rules_, self.rules_, self.display_logs)
-
+        print(" ---> Pruning rules")
+        self.minimal_rules_ = RulesUtils.prune_rules(None,
+                                                     self.sorting(),
+                                                     self.display_logs)
+        print("END")
         return self
 
     # TODO: Extract TO STATIC?
@@ -465,11 +486,11 @@ class SRules(ClassifierMixin):
     def clean(self):
         self.rules_ = []
         self.minimal_rules_ = []
-        self.feature_importances = None
+        self.feature_importance = None
         self.nodes_dict = {}
         self.nodes_dict_ids = []
         self.pattern_list_valid_nodes = []
-        self.most_important_features_ = []
+        self.most_important_features_ = None
 
     def predict(self, X, sorting_method="target_accuracy"):
         """
@@ -497,8 +518,13 @@ class SRules(ClassifierMixin):
         """
         predictions = []
 
-        if not self.minimal_rules_:
-            self.minimal_rules_ = RulesUtils.prune_rules(self.sorting(sorting_method), self.display_logs)
+        if self.minimal_rules_ is None:
+            print("****************************")
+            print("PRUNNING RULES IN PREDICTION")
+            print("****************************")
+            self.minimal_rules_ = RulesUtils.prune_rules(self.minimal_rules_,
+                                                         self.sorting(sorting_method),
+                                                         self.display_logs)
 
         for x in X:
             categorize_rule = None
@@ -528,18 +554,22 @@ class SRules(ClassifierMixin):
 
     def rules_description(self):
         display = '> ++++++++++++++++++++++++++++\n'
-        display += f'> SRules --  Number of Rules: {len(self.rules_)}\n'
-        display += f'> SRules --  Number of Minimal Rules: {len(self.minimal_rules_)}\n'
+        if self.rules_ is not None:
+            display += f'> SRules --  Number of Rules: {len(self.rules_)}\n'
+        if self.minimal_rules_ is not None:
+            display += f'> SRules --  Number of Minimal Rules: {len(self.minimal_rules_)}\n'
         display += '> ++++++++++++++++++++++++++++\n'
         return display
 
     def __str__(self):
         display = self.rules_description()
-
-        if not self.minimal_rules_:
-            self.minimal_rules_ = RulesUtils.prune_rules(self.sorting(), self.display_logs)
-
-        for num in range(len(self.minimal_rules_)):
-            display += f'{self.minimal_rules_[num]}'
+        display += '> ------------------------------\n'
+        # TODO: TO METHODS?
+        if self.minimal_rules_ is not None:
+            for num in range(len(self.minimal_rules_)):
+                display += f'{self.minimal_rules_[num]}'
+        else:
+            for num in range(len(self.rules_)):
+                display += f'{self.rules_[num]}'
 
         return display

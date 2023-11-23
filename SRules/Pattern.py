@@ -32,7 +32,7 @@ class Pattern:
         full_query = ''
         for comparer in self.full_feature_comparer:
             full_query = concatenate_query(full_query, f'{comparer.get_query()}')
-        return full_query
+        return full_query.strip()
 
     def Predict(self, data_array):
         for comparer in self.full_feature_comparer:
@@ -42,14 +42,14 @@ class Pattern:
         return self.target_value
 
     def __str__(self):
-        display = '> ------------------------------\n'
-        display += f' ** Target value: {self.target_value}'
-        display += f' ** Target: {self.number_target}'
-        display += f' ** Total: {self.number_all}'
-        display += f' ** Accuracy: {self.target_accuracy}'
-        display += f' ** Complexity: {self.get_complexity()}'
-        display += f' ** Chi2 critical_value: {self.chi2_critical_value}'
-        display += f' ** P_value: {self.p_value}\n'
-        display += f'\t Query: {self.get_full_rule()}\n'
+        display = ''
+        # display += f' ** Target value: {self.target_value}'
+        # display += f' ** Target: {self.number_target}'
+        # display += f' ** Total: {self.number_all}'
+        display += f' ** Accuracy: {self.target_accuracy}\n'
+        # display += f' ** Complexity: {self.get_complexity()}'
+        # display += f' ** Chi2 critical_value: {self.chi2_critical_value}'
+        # display += f' ** P_value: {self.p_value}\n'
+        display += f' ** {self.get_full_rule()} --> {self.target_value}\n'
         display += '> ------------------------------\n'
         return display
