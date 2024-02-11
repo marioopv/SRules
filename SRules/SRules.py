@@ -27,7 +27,7 @@ class SRules(ClassifierMixin):
                  p_significance=0.95,
                  minImp=0.2,
                  min_accuracy_coefficient=0.9,
-                 minInsNode=3
+                 minInsNode=5
                  ):
         self.rules_ = []
         self.minimal_rules_ = []

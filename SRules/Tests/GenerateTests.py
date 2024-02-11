@@ -24,7 +24,7 @@ dataset_names = [
 ]
 
 # TODO: select best del nuestro automáticamente...
-# TestUtils.define_test_structure(dataset_names, ensembles, minImp, minInsNode, recursive)
+TestUtils.define_test_structure(dataset_names, ensembles, minImp, minInsNode, recursive)
 TestUtils.summary_tests(dataset_names, ensembles, minImp, minInsNode, recursive)
 TestUtils.summary_tests_by_dataset(dataset_names, ensembles, minImp, minInsNode, recursive)
 TestUtils.summary_tests_by_model(dataset_names, ensembles, minImp, minInsNode, recursive)
