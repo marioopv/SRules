@@ -12,7 +12,7 @@ def extract_feature_importance(method, X_train, use_shap, use_lime):
     if use_lime:
         return LimeUtils.extract_feature_importances_lime(method)
 
-    # TODO: CHECK OTHER METHODS
+    # TODO: CHECK x METHODS
     return method.feature_importances_
 
 

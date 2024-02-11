@@ -13,6 +13,7 @@ from sklearn import metrics
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, GradientBoostingClassifier
 from sklearn.metrics import make_scorer, f1_score
 from sklearn.model_selection import GridSearchCV, RepeatedStratifiedKFold
+from sklearn.neural_network import MLPClassifier
 from sklearn.tree import DecisionTreeClassifier
 from xgboost import XGBClassifier
 
@@ -69,7 +70,7 @@ def define_summary_header():
 
 
 @staticmethod
-def define_test_structure(dataset_names, ensembles, minImp, minInsNode, recursive):
+def define_test_structure(dataset_names, ensembles, minImp, minInsNode, recursive, use_shap, use_lime):
     for filename in dataset_names:
         X, y, dataset, target_value_name, pandas_dataset = read_dataset(filename, f'{path}/data/{filename}.csv')
         for ensemble in ensembles:
@@ -79,7 +80,7 @@ def define_test_structure(dataset_names, ensembles, minImp, minInsNode, recursiv
                         for chi2 in p_significance:
                             for sorting in sorting_method:
                                 joblib.Parallel(n_jobs=8)(
-                                    joblib.delayed(GenerateResults_File)(X, chi2, dataset, ensemble, filename, minIns, min_accuracy, recur, minImportance, sorting, y)
+                                    joblib.delayed(GenerateResults_File)(X, use_shap, use_lime, chi2, dataset, ensemble, filename, minIns, min_accuracy, recur, minImportance, sorting, y)
                                     for minIns in minInsNode)
 
 @staticmethod
@@ -212,13 +213,13 @@ def file_summary(dataset, ensemble, current_filename, dataset_filename):
 
 
 @staticmethod
-def GenerateResults_File(X, chi2, dataset, ensemble, filename, minIns, min_accuracy, recur, minImp, sorting, y):
+def GenerateResults_File(X, use_shap, use_lime, chi2, dataset, ensemble, filename, minIns, min_accuracy, recur, minImp, sorting, y):
     filename_reults = get_filename(ensemble, filename, minImp, minIns, min_accuracy, recur, chi2, sorting)
     print(filename_reults)
     file_writer = open(filename_reults, "w")
     file_writer.write(define_file_header())
     for train, test in RepeatedStratifiedKFold(n_splits=n_splits, n_repeats=n_repeats).split(X, y):
-        fold_experiment_result(X, chi2, dataset, ensemble, file_writer, minIns, min_accuracy, recur, minImp, sorting,
+        fold_experiment_result(X, use_shap, use_lime, chi2, dataset, ensemble, file_writer, minIns, min_accuracy, recur, minImp, sorting,
                                test, train, y)
     file_writer.close()
 
@@ -246,7 +247,7 @@ def get_summary_ensemble_filename_general_recursive(recur):
 
 
 @staticmethod
-def fold_experiment_result(X, chi2, dataset, ensemble, file_writer, minIns, min_accuracy, recursive, minImp, sorting,
+def fold_experiment_result(X, use_shap, use_lime, chi2, dataset, ensemble, file_writer, minIns, min_accuracy, recursive, minImp, sorting,
                            test,
                            train, y):
     X_train = X.loc[train].to_numpy()
@@ -257,9 +258,20 @@ def fold_experiment_result(X, chi2, dataset, ensemble, file_writer, minIns, min_
                                         columns=list(dataset['feature_names']) + [dataset.target_names])
 
     custom_scorer = make_scorer(f1_score, greater_is_better=True)
-    param_grid_tree = {
-        'max_depth': [2, 3, 4, 5, 6],  # number of minimum samples required at a leaf node.
-    }
+
+    # TREE
+    clf_tree = GridSearchCV(
+        # Evaluates the performance of different groups of parameters for a model based on cross-validation.
+        DecisionTreeClassifier(),
+        {
+            'max_depth': [2, 3, 4, 5, 6],  # number of minimum samples required at a leaf node.
+        },  # dict of parameters.
+        cv=5,  # Specified number of folds in the Cross-Validation(K-Fold).
+        scoring=custom_scorer)
+    clf_tree.fit(X_train, y_train)
+    tree = clf_tree.best_estimator_
+    y_pred_test_tree = tree.predict(X_test)
+
 
     if type(ensemble) == type(RandomForestClassifier()) or type(LGBMClassifier()) or type(XGBClassifier()):
         param_grid = {
@@ -277,17 +289,15 @@ def fold_experiment_result(X, chi2, dataset, ensemble, file_writer, minIns, min_
         param_grid = {
             'n_estimators': [10, 25, 50, 100, 250, 500],  # being the number of trees in the forest.
         }
-    # TREE
-    clf_tree = GridSearchCV(
-        # Evaluates the performance of different groups of parameters for a model based on cross-validation.
-        DecisionTreeClassifier(),
-        param_grid_tree,  # dict of parameters.
-        cv=5,  # Specified number of folds in the Cross-Validation(K-Fold).
-        scoring=custom_scorer)
-    clf_tree.fit(X_train, y_train)
-    tree = clf_tree.best_estimator_
-    y_pred_test_tree = tree.predict(X_test)
-
+    if type(ensemble) == type(MLPClassifier()):
+        param_grid = {
+            'solver': ['adam'],
+            'learning_rate_init': [0.0001],
+            'max_iter': [300],
+            'activation': ['relu'],
+            'alpha': [0.0001, 0.001, 0.005],
+            'early_stopping': [True, False]
+        }
     # ENSEMBLE
     clf_ensemble = GridSearchCV(
         # Evaluates the performance of different groups of parameters for a model based on cross-validation.
@@ -331,8 +341,8 @@ def fold_experiment_result(X, chi2, dataset, ensemble, file_writer, minIns, min_
                        X_train=X_train,
                        y_train=y_train,
                        original_dataset=train_pandas_dataset,
-                       use_shap=False,
-                       use_lime=False)
+                       use_shap=use_shap,
+                       use_lime=use_lime)
     y_pred_test_rules = SRulesMethod.predict(X_test, sorting_method=sorting)
     line_results = generate_results(chi2, min_accuracy, minIns, SRulesMethod, RuleCosiMethod, RuleFIT,
                                     minImp,

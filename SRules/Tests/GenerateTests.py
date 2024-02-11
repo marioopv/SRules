@@ -1,9 +1,11 @@
 from catboost import CatBoostClassifier
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, GradientBoostingClassifier
+from sklearn.neural_network import MLPClassifier
 
 from SRules.Tests.Utils import TestUtils
 
 ensembles = [
+    ## MLPClassifier(),
     CatBoostClassifier(),
     GradientBoostingClassifier(),
     RandomForestClassifier(),
@@ -22,9 +24,11 @@ dataset_names = [
     "tic-tac-toe",
     "kr-vs-kp",
 ]
+use_shap = True
+use_lime = False
 
 # TODO: select best del nuestro automáticamente...
-TestUtils.define_test_structure(dataset_names, ensembles, minImp, minInsNode, recursive)
+# TestUtils.define_test_structure(dataset_names, ensembles, minImp, minInsNode, recursive)
 TestUtils.summary_tests(dataset_names, ensembles, minImp, minInsNode, recursive)
 TestUtils.summary_tests_by_dataset(dataset_names, ensembles, minImp, minInsNode, recursive)
 TestUtils.summary_tests_by_model(dataset_names, ensembles, minImp, minInsNode, recursive)
