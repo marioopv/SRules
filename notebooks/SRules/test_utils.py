@@ -1,55 +1,20 @@
-import copy
 import numpy as np
-import pandas as pd
 import time
 
+import numpy as np
+import pandas as pd
 from catboost import CatBoostClassifier
 from imodels import RuleFitClassifier
 from lightgbm import LGBMClassifier
 from rulecosi import RuleCOSIClassifier
 from sklearn import metrics
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, GradientBoostingClassifier
-from sklearn.metrics import make_scorer, accuracy_score, f1_score
+from sklearn.metrics import make_scorer, f1_score
 from sklearn.model_selection import GridSearchCV, RepeatedStratifiedKFold
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import OneHotEncoder
 from sklearn.tree import DecisionTreeClassifier
 from xgboost import XGBClassifier
 
 from SRules.SRules import SRules
-
-
-def continuous_to_discrete_column(dataset, list_of_continuous_columns, number_of_divisions=10):
-    labels = []
-
-    if number_of_divisions == 10:
-        labels = ['L_VeryLow', 'L_Low', 'L_Medium', 'L_High', 'L_VeryHigh',
-                  'R_VeryLow', 'R_Low', 'R_Medium', 'R_High', 'R_VeryHigh']
-    if number_of_divisions == 5:
-        labels = ['VeryLow', 'Low', 'Medium', 'High', 'VeryHigh']
-
-    for column_name in list_of_continuous_columns:
-        dataset[column_name] = pd.cut(
-            dataset[column_name]
-            , number_of_divisions
-            , labels=labels
-        )
-
-    return dataset
-
-
-def clean_names(name_list):
-    return [sub.replace('?', '_').replace('.', '_').replace('-', '_').replace(' ', '') for sub in name_list]
-
-
-def one_hot_encode_dataframe(data, feature_names):
-    enc = OneHotEncoder(sparse_output=False)
-    encoded_array = enc.fit_transform(data.loc[:, feature_names])
-    encoded_feature_names = clean_names(enc.get_feature_names_out())
-    df_encoded = pd.DataFrame(encoded_array, columns=encoded_feature_names)
-    encoded_pandas_dataset = pd.concat([df_encoded, data], axis=1)
-    encoded_pandas_dataset.drop(labels=feature_names, axis=1, inplace=True)
-    return encoded_pandas_dataset, encoded_feature_names
 
 
 def generate_results(recur, classifier, results_file_name, X, y, dataset, test_size,
@@ -79,13 +44,15 @@ def generate_results(recur, classifier, results_file_name, X, y, dataset, test_s
         y_train = y.loc[train].to_numpy()
         X_test = X.loc[test].to_numpy()
         y_test = y.loc[test].to_numpy()
-        for_results(recur, classifier, X_train, X_test, y_train, y_test, chi_square_percent_point_function, criterion, dataset, f,
+        for_results(recur, classifier, X_train, X_test, y_train, y_test, chi_square_percent_point_function, criterion,
+                    dataset, f,
                     min_accuracy_coefficient,
                     min_number_class_per_node, scale_feature_coefficient, sorting_method, test_size)
     f.close()
 
 
-def for_results(recur, classifier, X_train, X_test, y_train, y_test, chi_square_percent_point_function, criterion, dataset, f,
+def for_results(recur, classifier, X_train, X_test, y_train, y_test, chi_square_percent_point_function, criterion,
+                dataset, f,
                 min_accuracy_coefficient,
                 min_number_class_per_node, scale_feature_coefficient, sorting_method, test_size):
     train_pandas_dataset = pd.DataFrame(data=np.c_[X_train, y_train],
@@ -109,13 +76,15 @@ def for_results(recur, classifier, X_train, X_test, y_train, y_test, chi_square_
     ruleFit.fit(X_train_int, y_train_int, feature_names=dataset.feature_names)
     y_pred_test_RuleFit = ruleFit.predict(X_test_int)
     for criteria in criterion:
-        generate_results_from_criterion(recur, classifier, X_test, X_train, chi_square_percent_point_function, criteria, dataset, f,
+        generate_results_from_criterion(recur, classifier, X_test, X_train, chi_square_percent_point_function, criteria,
+                                        dataset, f,
                                         min_accuracy_coefficient, min_number_class_per_node, scale_feature_coefficient,
                                         sorting_method, train_pandas_dataset, y_pred_test_RuleFit, y_pred_test_tree,
                                         y_test, y_train)
 
 
-def generate_results_from_criterion(recur, classifier, X_test, X_train, chi_square_percent_point_function, criteria, dataset, f,
+def generate_results_from_criterion(recur, classifier, X_test, X_train, chi_square_percent_point_function, criteria,
+                                    dataset, f,
                                     min_accuracy_coefficient, min_number_class_per_node, scale_feature_coefficient,
                                     sorting_method, train_pandas_dataset, y_pred_test_RuleFit, y_pred_test_tree, y_test,
                                     y_train):
@@ -140,17 +109,21 @@ def generate_results_from_criterion(recur, classifier, X_test, X_train, chi_squa
                         SubrogateRules = SRules(
                             feature_names=dataset.feature_names,
                             target_value_name=dataset.target_names,
-                            chi_square_percent_point_function=chi2,
+                            p_significance=chi2,
                             scale_feature_coefficient=scaler,
                             min_accuracy_coefficient=min_accuracy,
-                            min_number_class_per_node=min_class,
+                            minInsNode=min_class,
                             display_features=False,
                             display_logs=False,
                             recursive=recur
                         )
-                        SubrogateRules.fit(ensemble, X_train, y_train, train_pandas_dataset, ensemble.feature_importances_)
+                        SubrogateRules.fit(method=ensemble,
+                                           X_train=X_train,
+                                           y_train= y_train,
+                                           original_dataset=train_pandas_dataset,
+                                           use_shap=False,
+                                           use_lime=False)
                         y_pred_test_rules = SubrogateRules.predict(X_test, sorting_method=sorting)
-
 
                         if not y_pred_test_rules:
                             print("NOT CALCULATED")
@@ -161,9 +134,11 @@ def generate_results_from_criterion(recur, classifier, X_test, X_train, chi_squa
                             empty_restuls(chi2, criteria, f, min_accuracy, min_class, scaler, y_test)
                             continue
 
-                        line_results = generate_line_results(chi2, criteria, min_accuracy, min_class, SubrogateRules, scaler,
+                        line_results = generate_line_results(chi2, criteria, min_accuracy, min_class, SubrogateRules,
+                                                             scaler,
                                                              sorting,
-                                                             y_pred_test_RuleFit, y_pred_test_ensemble, y_pred_test_rules,
+                                                             y_pred_test_RuleFit, y_pred_test_ensemble,
+                                                             y_pred_test_rules,
                                                              y_pred_test_tree, y_test, y_pred_test_rulecosi)
                         print(line_results)
                         f.write(line_results)
@@ -468,10 +443,10 @@ def kfold_test(recursive, classifier, X, chi_square_percent_point_function, data
         SubrogateRules = SRules(
             feature_names=dataset.feature_names,
             target_value_name=dataset.target_names,
-            chi_square_percent_point_function=chi_square_percent_point_function,
+            p_significance=chi_square_percent_point_function,
             scale_feature_coefficient=scale_feature_coefficient,
             min_accuracy_coefficient=min_accuracy_coefficient,
-            min_number_class_per_node=min_number_class_per_node,
+            minInsNode=min_number_class_per_node,
             display_features=False,
             display_logs=False,
             recursive=recursive
@@ -489,7 +464,7 @@ def kfold_test(recursive, classifier, X, chi_square_percent_point_function, data
 
         # RULECOSI
         rulecosi = RuleCOSIClassifier(
-            #base_ensemble=ensemble,
+            # base_ensemble=ensemble,
             conf_threshold=0.9,
             cov_threshold=0.0,
             column_names=dataset.feature_names)

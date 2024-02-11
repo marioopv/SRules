@@ -1,12 +1,8 @@
 from sklearn import preprocessing
 import numpy as np
-from sklearn.svm import LinearSVC
 from SRules.Utils import DisplayUtils
 import SRules.Utils.LimeUtils as LimeUtils
 import SRules.Utils.ShapUtils as ShapUtils
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.neural_network import MLPClassifier
-from sklearn.linear_model import LogisticRegression
 
 
 @staticmethod

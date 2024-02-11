@@ -1,9 +1,8 @@
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, BaggingClassifier, AdaBoostClassifier
+from sklearn.ensemble import GradientBoostingClassifier, AdaBoostClassifier
 
 from catboost import CatBoostClassifier
-from lightgbm import LGBMClassifier
-from xgboost import XGBClassifier
-from notebooks.SRules.read_datasets import dataset_names, read_dataset
+
+from SRules.Tests.Utils.DatasetUtils import read_dataset
 from notebooks.SRules.test_utils import generate_battery_test
 
 import warnings

@@ -1,12 +1,6 @@
+from SRules.Tests.Utils.DatasetUtils import read_dataset
 from notebooks.SRules.test_utils import generate_results
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, BaggingClassifier, AdaBoostClassifier
-
-from catboost import CatBoostClassifier
-from lightgbm import LGBMClassifier
-from xgboost import XGBClassifier
-from notebooks.SRules.read_datasets import dataset_names, read_dataset
-
-
+from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
 
 path = f'../../..'
 
@@ -15,7 +9,7 @@ test_size = 0.2
 classifiers = [
     #CatBoostClassifier(),
     #GradientBoostingClassifier(),
-    RandomForestClassifier(),
+    #RandomForestClassifier(),
     AdaBoostClassifier(),
     # XGBClassifier(),
     # LGBMClassifier(),
@@ -27,8 +21,8 @@ n_repeats = 3
 # TIME CONSUMING
 # criterion = ["gini", "entropy", "log_loss"]
 criterion = ["gini"]
-scale_feature_coefficient = [0.05]
-min_number_class_per_node_list = [5, 10, 20, 25, 30, 50]
+scale_feature_coefficient = [0.1]
+min_number_class_per_node_list = [5, 10]
 
 # NOT TIME CONSUMING
 min_accuracy_coefficient = [0.95]
