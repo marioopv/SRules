@@ -160,3 +160,5 @@ cython_debug/
 #.idea/
 *.png
 !/Results/
+!/rulecosi/
+!/notebooks/SRules/catboost_info/
